@@ -1,13 +1,11 @@
 import itertools
 
 stuff = [1, 2, 3]
+combinations = []
+# saves all combinations of the elements to the combinations list
 for L in range(1, len(stuff)+1):
     for subset in itertools.combinations(stuff, L):
-        print(list(subset))
-        print(subset)
-
-print()
-print()
+        combinations.append(list(subset))
 
 feature_list = [
     'MSSubClass',
