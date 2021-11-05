@@ -16,6 +16,8 @@ def read_file(fileprefix: str = '') -> Tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def write_prediction(df: pd.DataFrame) -> None:
+    df.Id = df['Id'].astype('int32')
+    print(df.dtypes)
     df.to_csv('submission.csv', index=False)
 
 

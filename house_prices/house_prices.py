@@ -1,10 +1,18 @@
-from typing import List, Tuple, Set, Union
+from typing import List, Tuple, Set, Union, Iterable, Any
 
 import pandas as pd
+import sklearn.metrics
 from pandas import Index
+from sklearn.base import ClusterMixin
+from sklearn.cluster import KMeans
+from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
 from sklearn.impute import SimpleImputer, KNNImputer
 # This is just for Typing. I don't acutally use this Class anywhere
 from sklearn.impute._base import _BaseImputer
+from sklearn.metrics import mean_absolute_percentage_error
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing._encoders import _BaseEncoder, OneHotEncoder, OrdinalEncoder
 
 from util import read_file, write_prediction, plot_columns
 
@@ -50,9 +58,42 @@ def fill_na(X: pd.DataFrame, strategies: List[Tuple[Union[List[str], Index, Set[
     df = X
 
     for columns, imputer in strategies:
-        impuned = pd.DataFrame(imputer.fit_transform(X[columns]))
+        try:
+            # this throws an error, if either the transform function is not implemented (it is for SimpleImputer)
+            # or if the the transform wasn't fit yet.
+            # That way the transform function is called for the test dataset,
+            # because the imputer was fit with the train set.
+            impuned = pd.DataFrame(imputer.transform(X[columns]))
+        except:
+            impuned = pd.DataFrame(imputer.fit_transform(X[columns]))
         impuned.columns = columns
         df[impuned.columns] = impuned
+    return df
+
+
+def encode_columns(
+        X: pd.DataFrame,
+        num_cols: Iterable[str],
+        strategies: List[Tuple[Union[List[str], Index, Set[str]], _BaseEncoder]]
+) -> pd.DataFrame:
+    """
+    Encodes all given columns using the defined strategy
+    :param X: The dataframe to encode
+    :param strategies: which strategy should be used for which columns
+    :return: The encoded dataframe
+    """
+    df = X[num_cols]
+    for columns, encoder in strategies:
+        try:
+            encoded = pd.DataFrame(encoder.transform(X[columns]))
+        except:
+            encoded = pd.DataFrame(encoder.fit_transform(X[columns]))
+        encoded.index = X.index
+        if len(columns) == len(encoded.columns):
+            encoded.columns = columns
+        else:
+            encoded.columns = [str(type(encoder)).split('.')[-1].split('\'')[0] + str(col) for col in encoded.columns]
+        df = pd.concat([df, encoded], axis=1)
     return df
 
 
@@ -68,36 +109,102 @@ def get_cols_to_drop_for_ordinal_encoder(
     :param val_X: the validation set
     :return: The set of columns which have to be dropped
     """
-    return high_cardinality_columns - set([col for col in high_cardinality_columns if set(val_X[col]).issubset(train_X[col])])
+    return high_cardinality_columns - set(
+        [col for col in high_cardinality_columns if set(val_X[col]).issubset(train_X[col])])
 
 
-def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> pd.DataFrame:
+def cluster_data(X: pd.DataFrame,
+                 test_x: pd.DataFrame,
+                 clusters: List[Tuple[List[str], ClusterMixin]]
+                 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Clusters the given DataFrame for each cluster using KMeans
+    :param X: The dataframe to fit_transform
+    :param test_x: The dataframe to transform
+    :param clusters: the columns to cluster after and the algorithm to use
+    :return: The transformed dataframes
+    """
+    for i, cluster in enumerate(clusters):
+        col_name = f'cluster' + str(i)
+        X[col_name] = cluster[1].fit_predict(X[cluster[0]])
+        # X[col_name] = X[col_name].astype("category")
+        try:
+            test_x[col_name] = cluster[1].predict(test_x[cluster[0]])
+        except:
+            test_x[col_name] = cluster[1].fit_predict(test_x[cluster[0]])
+        # test_x[col_name] = test_x[col_name].astype('category')
+    return X, test_x
+
+
+def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     transforms the given dataset
     :param X: the dataset to transform
     :param test_X: The data to predict (used to check for ordinal usage)
     :return: the transformed dataset
     """
-    cols_to_drop: List[str] = get_na_to_drop(X)
+    cols_to_drop: Iterable[str] = get_na_to_drop(X)
     X = X.drop(cols_to_drop, axis=1)
 
     obj_cols: pd.DataFrame = X.select_dtypes('object')
     num_cols: pd.DataFrame = X.select_dtypes(['float64', 'int64', 'float32', 'int32'])
     low_cardinality_columns, high_cardinality_columns = split_obj_cols_by_cardinality(obj_cols)
 
-    X = fill_na(X, [
+    strategies = [
         (num_cols.columns, SimpleImputer(strategy='mean')),
         (low_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # KNN might be quite useful here
         (high_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # Same over here
-    ])
+    ]
 
-    get_cols_to_drop_for_ordinal_encoder()
+    X = fill_na(X, strategies)
+    test_X = fill_na(test_X, strategies)
 
-    return X
+    cols_to_drop = get_cols_to_drop_for_ordinal_encoder(high_cardinality_columns, X, test_X)
+    # removes all dropped columns from the set, to not get KeyErrors while transforming
+    high_cardinality_columns -= cols_to_drop
+    X = X.drop(cols_to_drop, axis=1)
+    test_X = test_X.drop(cols_to_drop, axis=1)
+
+    strategies = [
+        (low_cardinality_columns, OneHotEncoder(handle_unknown='ignore', sparse=False)),
+        (high_cardinality_columns, OrdinalEncoder())
+    ]
+
+    X = encode_columns(X, num_cols.columns, strategies)
+    test_X = encode_columns(test_X, num_cols.columns, strategies)
+
+    clusters = [
+        (['MSSubClass', 'Neighborhood'], KMeans()),
+        (['YearBuilt'], KMeans()),
+        (['GarageYrBlt', 'GarageArea', 'GarageCars'], KMeans()),
+    ]
+
+    X, test_X = cluster_data(X, test_X, clusters)
+
+    X.head().to_csv('validation_test.csv')
+
+    return X, test_X
 
 
-def generate_model(X: pd.DataFrame, y: pd.Series):
-    return None
+# Sadly, the RandomForestRegressor and XGBoost don't have a Common super class,
+# which could be used to define a return type here
+def generate_model(X: pd.DataFrame, y: pd.Series, model: {"fit", "predict"}) -> Tuple[Any, float]:
+    """
+    prepares and scores the given model
+    :param X: The train dataset
+    :param y: The values to predict
+    :param model: The model to prepare
+    :return: The Trained model and its MAPE score
+    """
+
+    def get_score(x_train, x_val, y_train, y_val, model) -> float:
+        model.fit(x_train, y_train)
+        predictions = model.predict(x_val)
+        return mean_absolute_percentage_error(y_val, predictions)
+
+    score = get_score(*train_test_split(X, y), model)
+    model.fit(X, y)
+    return model, score
 
 
 def get_top_10_missing_percent(x: pd.DataFrame) -> pd.DataFrame:
@@ -124,18 +231,27 @@ def main():
     # Setting y to the SalePrice as that is the value we are trying to predict
     y = X.pop('SalePrice')
 
-    X = transform_dataset(X)
-
-    test_X = transform_dataset(test_data)
+    X, test_X = transform_dataset(X, test_data)
+    X.head(100).to_csv('validation_test.csv')
 
     # plot_columns(X, get_top_10_missing_percent)
 
-    model = generate_model(X, y)
-    predictions = None
-    # predictions = model.predict(test_X)
-    write_prediction(predictions)
+    models = [
+        XGBRegressor()
+    ]
 
-    # print(f"obj_cols: {obj_cols}")
+    captures: List[Tuple[Any, float]] = []
+
+    for model in models:
+        captures.append(generate_model(X, y, model))
+    print(captures)
+    best_capture = None
+    for model, score in captures:
+        if best_capture is None or best_capture[1] > score:
+            best_capture = model, score
+    best_model = best_capture[0]
+    predictions = best_model.predict(test_X)
+    write_prediction(pd.DataFrame({'Id': test_X.Id, 'SalePrice': predictions}))
 
 
 if __name__ == '__main__':
