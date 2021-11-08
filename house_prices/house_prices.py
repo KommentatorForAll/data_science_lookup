@@ -1,17 +1,21 @@
+import time
 from typing import List, Tuple, Set, Union, Iterable, Any
 
+import warnings
+warnings.filterwarnings('ignore')
+import matplotlib.pyplot as plt
 import pandas as pd
 import sklearn.metrics
 from pandas import Index
 from sklearn.base import ClusterMixin
 from sklearn.cluster import KMeans
 from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor
+from xgboost import XGBRegressor, XGBClassifier
 from sklearn.impute import SimpleImputer, KNNImputer
 # This is just for Typing. I don't acutally use this Class anywhere
 from sklearn.impute._base import _BaseImputer
 from sklearn.metrics import mean_absolute_percentage_error
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold, RandomizedSearchCV
 from sklearn.preprocessing._encoders import _BaseEncoder, OneHotEncoder, OrdinalEncoder
 
 from util import read_file, write_prediction, plot_columns
@@ -148,12 +152,12 @@ def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFra
 
     obj_cols: pd.DataFrame = X.select_dtypes('object')
     num_cols: pd.DataFrame = X.select_dtypes(['float64', 'int64', 'float32', 'int32'])
-    low_cardinality_columns, high_cardinality_columns = split_obj_cols_by_cardinality(obj_cols)
+    low_cardinality_columns, high_cardinality_columns = split_obj_cols_by_cardinality(obj_cols, 1000)
 
     strategies = [
         (num_cols.columns, SimpleImputer(strategy='mean')),
         (low_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # KNN might be quite useful here
-        (high_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # Same over here
+        # (high_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # Same over here
     ]
 
     X = fill_na(X, strategies)
@@ -179,7 +183,7 @@ def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFra
         (['GarageYrBlt', 'GarageArea', 'GarageCars'], KMeans()),
     ]
 
-    X, test_X = cluster_data(X, test_X, clusters)
+    # X, test_X = cluster_data(X, test_X, clusters)
 
     X.head().to_csv('validation_test.csv')
 
@@ -232,26 +236,62 @@ def main():
     y = X.pop('SalePrice')
 
     X, test_X = transform_dataset(X, test_data)
-    X.head(100).to_csv('validation_test.csv')
 
     # plot_columns(X, get_top_10_missing_percent)
 
     models = [
-        XGBRegressor()
+        *[[i, XGBRegressor(n_estimators=i, random_state=0)] for i in range(10, 151, 10)]
     ]
 
-    captures: List[Tuple[Any, float]] = []
+    params = {
+        'min_child_weight': [1, 5, 10],
+        'gamma': [0.5, 1, 1.5, 2, 5],
+        'n_estimators': list(range(10, 101, 10)),
+        'max_depth': [3, 4, 5],
+        'learn_rate': [0.1, 0.01, 0.05, 0.03],
+    }
 
-    for model in models:
-        captures.append(generate_model(X, y, model))
-    print(captures)
-    best_capture = None
-    for model, score in captures:
-        if best_capture is None or best_capture[1] > score:
-            best_capture = model, score
-    best_model = best_capture[0]
-    predictions = best_model.predict(test_X)
-    write_prediction(pd.DataFrame({'Id': test_X.Id, 'SalePrice': predictions}))
+    xgb = XGBClassifier(objective='binary:logistic',
+                        silent=True, nthread=1)
+
+    captures: List[Tuple[int, Any, float]] = []
+
+    folds = 5
+    param_comb = 50
+
+    skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=1001)
+
+    random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='neg_mean_absolute_error', n_jobs=4,
+                                       cv=skf.split(X, y), verbose=3, random_state=1001)
+
+    start = time.time()
+    random_search.fit(X, y)
+    stop = time.time()
+    print(f'took {stop-start/60} seconds')
+
+    print('\n All results:')
+    print(random_search.cv_results_)
+    print('\n Best estimator:')
+    print(random_search.best_estimator_)
+    print('\n Best normalized gini score for %d-fold search with %d parameter combinations:' % (folds, param_comb))
+    print(random_search.best_score_ * 2 - 1)
+    print('\n Best hyperparameters:')
+    print(random_search.best_params_)
+    results = pd.DataFrame(random_search.cv_results_)
+    results.to_csv('xgb-random-grid-search-results-01.csv', index=False)
+
+    # for i, model in models:
+    #     captures.append((i, *generate_model(X, y, model)))
+    # print(captures)
+    # best_capture = None
+    # for i, model, score in captures:
+    #     if best_capture is None or best_capture[1] > score:
+    #         best_capture = model, score
+    # plt.plot([cap[0] for cap in captures], [cap[2] for cap in captures])
+    # plt.show()
+    # best_model = best_capture[0]
+    # predictions = best_model.predict(test_X)
+    # write_prediction(pd.DataFrame({'Id': test_X.Id, 'SalePrice': predictions}))
 
 
 if __name__ == '__main__':
