@@ -251,18 +251,21 @@ def main():
     :return:
     """
 
+    train_data, test_data = read_datasets()
     features: List[str] = [
-        'ExterQual', 'ExterCond', 'OverallQual',
+        'OverallQual',
         'YearBuilt', 'TotalBsmtSF', '1stFlrSF',
         'GrLivArea', 'FullBath', 'GarageCars',
-        'GarageArea', 'BsmtQual', 'BsmtCond',
-        'SalePrice'
+        'GarageArea',
+        'Id',
+        *util.get_ordinal_columns(train_data),
     ]
+    print(features)
 
-    train_data, test_data = read_datasets()
     X: pd.DataFrame = train_data[features].copy()
+    test_data = test_data[features].copy()
     # Setting y to the SalePrice as that is the value we are trying to predict
-    y = X.pop('SalePrice')
+    y = train_data['SalePrice']
 
     X, test_X = transform_dataset(X, test_data)
 
@@ -273,8 +276,8 @@ def main():
     params = {
         'min_child_weight': [0],  # [1, 5, 10, 20] -> 1; [0.5, 0.75, 1, 2, 3, 4] -> 0.5; [0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5] -> .05
         'gamma': [0],  # [0.5, 1, 1.5, 2, 5] -> 0.5; [0.1, 0.25, 0.5, 0.75, 1] -> 0.1; [0.01, 0.025, 0.05, 0.075, 0.1] -> 0.01
-        'n_estimators': [23],  # [22],  # range(10, 201,10) -> 20; range(10,30,2) -> 22
-        'max_depth': [4],  # [4],  # range(3,6) -> 4
+        'n_estimators': range(20,31,2),  # [22],  # range(10, 201,10) -> 20; range(10,30,2) -> 22
+        'max_depth': range(3,6),  # [4],  # range(3,6) -> 4
         'eta': [0.25],  # [0.1, 0.01, 0.05, 0.03] -> 0.1; [0.1, 0.05, 0.075, 0.25, 0.5, 0.75, 1] -> 0.25; [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5] -> 0.2
         'tree_method': ['approx'],  # ['auto', 'exact', 'approx', 'hist', 'gpu_hist'] -> 'approx'
         'sketch_eps': [0.03],  # [0.01, 0.02, 0.03, 0.04, 0.05] -> 0.03;
@@ -287,7 +290,7 @@ def main():
     skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=1001)
 
     grid_search = GridSearchCV(xgb, param_grid=params, scoring='neg_mean_absolute_error', n_jobs=4,
-                               cv=skf.split(X, y), verbose=3)
+                               cv=skf.split(X, y), verbose=3, refit=True)
 
     start = time.time()
     grid_search.fit(X, y)
@@ -302,7 +305,7 @@ def main():
     print('\n Best hyperparameters:')
     print(grid_search.best_params_)
     results = pd.DataFrame(grid_search.cv_results_)
-    results.to_csv('xgb-grid-search-results-07.csv', index=False)
+    results.to_csv('xgb-grid-search-results-08.csv', index=False)
     m, sec = divmod(stop-start, 60)
     print(f'took {int(m)} min {int(sec)} sec')
 
@@ -317,8 +320,8 @@ def main():
     # plt.show()
     # best_model = best_capture[0]
 
-    # predictions = best_model.predict(test_X)
-    # write_prediction(pd.DataFrame({'Id': test_X.Id, 'SalePrice': predictions}))
+    predictions = grid_search.best_estimator_.predict(test_X)
+    util.write_prediction(pd.DataFrame({'Id': test_X['Id'], 'SalePrice': predictions}))
 
 
 if __name__ == '__main__':
