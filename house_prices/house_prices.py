@@ -252,14 +252,16 @@ def main():
     """
 
     train_data, test_data = read_datasets()
-    features: List[str] = [
-        'OverallQual',
-        'YearBuilt', 'TotalBsmtSF', '1stFlrSF',
-        'GrLivArea', 'FullBath', 'GarageCars',
-        'GarageArea',
-        'Id',
-        *util.get_ordinal_columns(train_data),
-    ]
+    # features: List[str] = [
+    #     'OverallQual',
+    #     'YearBuilt', 'TotalBsmtSF', '1stFlrSF',
+    #     'GrLivArea', 'FullBath', 'GarageCars',
+    #     'GarageArea',
+    #     'Id',
+    #     *util.get_ordinal_columns(train_data),
+    # ]
+    features = [*train_data.select_dtypes(exclude=['object']).columns, *util.get_ordinal_columns(train_data)]
+    features.remove('SalePrice')
     print(features)
 
     X: pd.DataFrame = train_data[features].copy()
