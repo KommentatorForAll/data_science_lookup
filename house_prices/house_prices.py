@@ -1,29 +1,31 @@
 import time
-from typing import List, Tuple, Set, Union, Iterable, Any
-
 import warnings
-warnings.filterwarnings('ignore')
-import matplotlib.pyplot as plt
+from typing import List, Tuple, Set, Union, Iterable
+
 import pandas as pd
-import sklearn.metrics
 from pandas import Index
 from sklearn.base import ClusterMixin
 from sklearn.cluster import KMeans
-from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor, XGBClassifier
 from sklearn.impute import SimpleImputer, KNNImputer
 # This is just for Typing. I don't acutally use this Class anywhere
 from sklearn.impute._base import _BaseImputer
-from sklearn.metrics import mean_absolute_percentage_error
-from sklearn.model_selection import train_test_split, StratifiedKFold, RandomizedSearchCV
+from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from sklearn.preprocessing._encoders import _BaseEncoder, OneHotEncoder, OrdinalEncoder
+from xgboost import XGBRegressor
 
-from util import read_file, write_prediction, plot_columns
+import util
+from util import read_datasets
+
+warnings.filterwarnings('ignore')
 
 imputers_to_look_at = [
     SimpleImputer,
     KNNImputer,
 ]
+
+
+ORDINAL_ORDER = ['None', 'Po', 'Fa', 'TA', 'Gd', 'Ex']
+
 
 
 def get_na_to_drop(X: pd.DataFrame, threshold: float = 20) -> List[str]:
@@ -39,17 +41,18 @@ def get_na_to_drop(X: pd.DataFrame, threshold: float = 20) -> List[str]:
     return missing_value_df.loc[missing_value_df['percent_missing'] > threshold].index
 
 
-def split_obj_cols_by_cardinality(obj_cols: pd.DataFrame, threshold: int = 10) -> Tuple[Set[str], Set[str]]:
+def split_onehot_ordinal_columns(obj_cols: pd.DataFrame) -> Tuple[Set[str], Set[str]]:
     """
-    Splits the given object columns into low and high cardinality lists.
+    Splits the given object columns into Columns suitable for orinal encoding and onehot encoding
     :param obj_cols: all columns to look at
     :param threshold: the point at which the cardinality is counted as high
-    :return: A tuple of low and high cardinality columns
+    :return: A tuple of onehot and ordinal encodeable columns
     """
     full_set = set(obj_cols.columns)
-    low_cardinality_columns = set([col for col in obj_cols.columns if obj_cols[col].nunique() < threshold])
-    high_cardinality_columns = full_set - low_cardinality_columns
-    return low_cardinality_columns, high_cardinality_columns
+    ordinal_cols = set(util.get_ordinal_columns(obj_cols))
+    print(ordinal_cols)
+    onehot_cols = full_set - ordinal_cols
+    return onehot_cols, ordinal_cols
 
 
 def fill_na(X: pd.DataFrame, strategies: List[Tuple[Union[List[str], Index, Set[str]], _BaseImputer]]) -> pd.DataFrame:
@@ -88,6 +91,23 @@ def encode_columns(
     """
     df = X[num_cols]
     for columns, encoder in strategies:
+        if type(encoder) == OrdinalEncoder:
+            # for col in columns:
+            #     categories = np.array([x for x in ORDINAL_ORDER if x in X[col].unique()])
+            #     print(categories.shape)
+            #     print(X[col].unique().shape)
+            #     encoder = OrdinalEncoder(categories=list(categories))
+            #     encoded = pd.DataFrame(encoder.fit_transform(pd.DataFrame(X[col])))
+            #     encoded.index = X.index
+            #     encoded.columns = [col]
+            #     df = pd.concat([df, encoded], axis=1)
+            # continue
+            X[list(columns)] = X[list(columns)].fillna('None')
+            existing_values = []
+            [existing_values.append([x for x in ORDINAL_ORDER if x in X[c].unique()]) for c in columns]
+            print(existing_values)
+            encoder = OrdinalEncoder(categories=existing_values)
+
         try:
             encoded = pd.DataFrame(encoder.transform(X[columns]))
         except:
@@ -152,13 +172,14 @@ def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFra
 
     obj_cols: pd.DataFrame = X.select_dtypes('object')
     num_cols: pd.DataFrame = X.select_dtypes(['float64', 'int64', 'float32', 'int32'])
-    low_cardinality_columns, high_cardinality_columns = split_obj_cols_by_cardinality(obj_cols, 1000)
+    low_cardinality_columns, high_cardinality_columns = split_onehot_ordinal_columns(obj_cols)
 
     strategies = [
         (num_cols.columns, SimpleImputer(strategy='mean')),
-        (low_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # KNN might be quite useful here
-        # (high_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # Same over here
+        # (low_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # KNN might be quite useful here
+        # (high_cardinality_columns, SimpleImputer(fill_value='None')),  # Same over here
     ]
+    obj_cols[list(high_cardinality_columns)] = obj_cols[list(high_cardinality_columns)].fillna('None')
 
     X = fill_na(X, strategies)
     test_X = fill_na(test_X, strategies)
@@ -171,7 +192,7 @@ def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFra
 
     strategies = [
         (low_cardinality_columns, OneHotEncoder(handle_unknown='ignore', sparse=False)),
-        (high_cardinality_columns, OrdinalEncoder())
+        (high_cardinality_columns, OrdinalEncoder(categories={'Ex', 'Gd', 'TA', 'Fa', 'Po', 'None'}))
     ]
 
     X = encode_columns(X, num_cols.columns, strategies)
@@ -192,23 +213,23 @@ def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFra
 
 # Sadly, the RandomForestRegressor and XGBoost don't have a Common super class,
 # which could be used to define a return type here
-def generate_model(X: pd.DataFrame, y: pd.Series, model: {"fit", "predict"}) -> Tuple[Any, float]:
-    """
-    prepares and scores the given model
-    :param X: The train dataset
-    :param y: The values to predict
-    :param model: The model to prepare
-    :return: The Trained model and its MAPE score
-    """
-
-    def get_score(x_train, x_val, y_train, y_val, model) -> float:
-        model.fit(x_train, y_train)
-        predictions = model.predict(x_val)
-        return mean_absolute_percentage_error(y_val, predictions)
-
-    score = get_score(*train_test_split(X, y), model)
-    model.fit(X, y)
-    return model, score
+# def generate_model(X: pd.DataFrame, y: pd.Series, model: {"fit", "predict"}) -> Tuple[Any, float]:
+#     """
+#     prepares and scores the given model
+#     :param X: The train dataset
+#     :param y: The values to predict
+#     :param model: The model to prepare
+#     :return: The Trained model and its MAPE score
+#     """
+#
+#     def get_score(x_train, x_val, y_train, y_val, model) -> float:
+#         model.fit(x_train, y_train)
+#         predictions = model.predict(x_val)
+#         return mean_absolute_percentage_error(y_val, predictions)
+#
+#     score = get_score(*train_test_split(X, y), model)
+#     model.fit(X, y)
+#     return model, score
 
 
 def get_top_10_missing_percent(x: pd.DataFrame) -> pd.DataFrame:
@@ -230,55 +251,60 @@ def main():
     :return:
     """
 
-    train_data, test_data = read_file()
-    X: pd.DataFrame = train_data
+    features: List[str] = [
+        'ExterQual', 'ExterCond', 'OverallQual',
+        'YearBuilt', 'TotalBsmtSF', '1stFlrSF',
+        'GrLivArea', 'FullBath', 'GarageCars',
+        'GarageArea', 'BsmtQual', 'BsmtCond',
+        'SalePrice'
+    ]
+
+    train_data, test_data = read_datasets()
+    X: pd.DataFrame = train_data[features].copy()
     # Setting y to the SalePrice as that is the value we are trying to predict
     y = X.pop('SalePrice')
 
     X, test_X = transform_dataset(X, test_data)
-
-    # plot_columns(X, get_top_10_missing_percent)
 
     models = [
         *[[i, XGBRegressor(n_estimators=i, random_state=0)] for i in range(10, 151, 10)]
     ]
 
     params = {
-        'min_child_weight': [1, 5, 10],
-        'gamma': [0.5, 1, 1.5, 2, 5],
-        'n_estimators': list(range(10, 101, 10)),
-        'max_depth': [3, 4, 5],
-        'learn_rate': [0.1, 0.01, 0.05, 0.03],
+        'min_child_weight': [0],  # [1, 5, 10, 20] -> 1; [0.5, 0.75, 1, 2, 3, 4] -> 0.5; [0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5] -> .05
+        'gamma': [0],  # [0.5, 1, 1.5, 2, 5] -> 0.5; [0.1, 0.25, 0.5, 0.75, 1] -> 0.1; [0.01, 0.025, 0.05, 0.075, 0.1] -> 0.01
+        'n_estimators': [23],  # [22],  # range(10, 201,10) -> 20; range(10,30,2) -> 22
+        'max_depth': [4],  # [4],  # range(3,6) -> 4
+        'eta': [0.25],  # [0.1, 0.01, 0.05, 0.03] -> 0.1; [0.1, 0.05, 0.075, 0.25, 0.5, 0.75, 1] -> 0.25; [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5] -> 0.2
+        'tree_method': ['approx'],  # ['auto', 'exact', 'approx', 'hist', 'gpu_hist'] -> 'approx'
+        'sketch_eps': [0.03],  # [0.01, 0.02, 0.03, 0.04, 0.05] -> 0.03;
     }
 
-    xgb = XGBClassifier(objective='binary:logistic',
-                        silent=True, nthread=1)
-
-    captures: List[Tuple[int, Any, float]] = []
+    xgb = XGBRegressor(nthread=1)
 
     folds = 5
-    param_comb = 50
 
     skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=1001)
 
-    random_search = RandomizedSearchCV(xgb, param_distributions=params, n_iter=param_comb, scoring='neg_mean_absolute_error', n_jobs=4,
-                                       cv=skf.split(X, y), verbose=3, random_state=1001)
+    grid_search = GridSearchCV(xgb, param_grid=params, scoring='neg_mean_absolute_error', n_jobs=4,
+                               cv=skf.split(X, y), verbose=3)
 
     start = time.time()
-    random_search.fit(X, y)
+    grid_search.fit(X, y)
     stop = time.time()
-    print(f'took {stop-start/60} seconds')
 
     print('\n All results:')
-    print(random_search.cv_results_)
+    print(grid_search.cv_results_)
     print('\n Best estimator:')
-    print(random_search.best_estimator_)
-    print('\n Best normalized gini score for %d-fold search with %d parameter combinations:' % (folds, param_comb))
-    print(random_search.best_score_ * 2 - 1)
+    print(grid_search.best_estimator_)
+    print('\n Best normalized gini score for %d-fold search' % folds)
+    print(grid_search.best_score_)
     print('\n Best hyperparameters:')
-    print(random_search.best_params_)
-    results = pd.DataFrame(random_search.cv_results_)
-    results.to_csv('xgb-random-grid-search-results-01.csv', index=False)
+    print(grid_search.best_params_)
+    results = pd.DataFrame(grid_search.cv_results_)
+    results.to_csv('xgb-grid-search-results-07.csv', index=False)
+    m, sec = divmod(stop-start, 60)
+    print(f'took {int(m)} min {int(sec)} sec')
 
     # for i, model in models:
     #     captures.append((i, *generate_model(X, y, model)))
@@ -290,6 +316,7 @@ def main():
     # plt.plot([cap[0] for cap in captures], [cap[2] for cap in captures])
     # plt.show()
     # best_model = best_capture[0]
+
     # predictions = best_model.predict(test_X)
     # write_prediction(pd.DataFrame({'Id': test_X.Id, 'SalePrice': predictions}))
 

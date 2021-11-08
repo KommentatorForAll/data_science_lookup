@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def read_file(fileprefix: str = '') -> Tuple[pd.DataFrame, pd.DataFrame]:
+def read_datasets(fileprefix: str = '') -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Reads the Train and Test data and returns it
     :param fileprefix: the file name prefix
@@ -25,3 +25,10 @@ def plot_columns(df: pd.DataFrame, transform_function=None):
     transform_function(df)
     df.plot.bar()
     plt.show()
+
+
+def get_ordinal_columns(df: pd.DataFrame):
+    vals = {'Ex', 'Gd', 'TA', 'Fa', 'Po', 'None'}
+    df = df.fillna('None')
+    cols = [col for col in df.select_dtypes('object').columns if set(df[col].unique()).issubset(vals)]
+    return cols
