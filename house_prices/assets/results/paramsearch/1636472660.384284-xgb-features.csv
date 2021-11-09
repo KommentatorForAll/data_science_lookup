@@ -1,0 +1,2 @@
+1stFlrSF,FullBath,GarageCars,GrLivArea,OverallCond,OverallQual,TotalBsmtSF,TotRmsAbvGrd,Id,OneHotEncoder0,OneHotEncoder1,OneHotEncoder2,OneHotEncoder4,ExterQual,HeatingQC,BsmtQual
+36.0,10.0,15.0,55.0,29.0,18.0,37.0,17.0,34.0,3.0,1.0,6.0,6.0,4.0,5.0,15.0

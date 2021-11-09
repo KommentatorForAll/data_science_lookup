@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def read_datasets(fileprefix: str = '') -> Tuple[pd.DataFrame, pd.DataFrame]:
+def read_datasets(fileprefix: str = './assets/input/') -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Reads the Train and Test data and returns it
     :param fileprefix: the file name prefix
@@ -20,8 +20,8 @@ def read_datasets(fileprefix: str = '') -> Tuple[pd.DataFrame, pd.DataFrame]:
 def write_prediction(df: pd.DataFrame) -> None:
     df.Id = df['Id'].astype('int32')
     print(df.dtypes)
-    os.makedirs(f'./house_prices/assets/output', exist_ok=True)
-    df.to_csv(f'./house_prices/assets/output/{time.time()}-submission.csv', index=False)
+    os.makedirs(f'./assets/output', exist_ok=True)
+    df.to_csv(f'./assets/output/{time.time()}-submission.csv', index=False)
 
 
 def plot_columns(df: pd.DataFrame, transform_function=None):

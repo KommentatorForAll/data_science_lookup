@@ -246,6 +246,49 @@ def get_top_10_missing_percent(x: pd.DataFrame) -> pd.DataFrame:
     return missing_value_df.head(10)
 
 
+def drop_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.drop(df[(df['BsmtQual'] == 'Gd') & (df['SalePrice'] > 500000)].index)
+    df = df.drop(df[(df['BsmtQual'] == 'TA') & (df['SalePrice'] > 350000)].index)
+
+    df = df.drop(df[(df['BsmtCond'] == 'Gd') & (df['SalePrice'] > 400000)].index)
+
+    df = df.drop(df[(df['ExterQual'] == 'Fa') & (df['SalePrice'] > 200000)].index)
+    df = df.drop(df[(df['ExterQual'] == 'Gd') & (df['SalePrice'] > 450000)].index)
+
+    df = df.drop(df[(df['FireplaceQu'] == 'TA') & (df['SalePrice'] > 400000)].index)
+    df = df.drop(df[(df['FireplaceQu'] == 'Ex') & (df['SalePrice'] > 500000)].index)
+
+    df = df.drop(df[(df['GarageFinish'] == 'RFn') & (df['SalePrice'] > 500000)].index)
+    df = df.drop(df[(df['GarageFinish'] == 'UInf') & (df['SalePrice'] > 300000)].index)
+    df = df.drop(df[(df['GarageFinish'] == 'Fin') & (df['SalePrice'] > 550000)].index)
+
+    df = df.drop(df[(df['KitchenQual'] == 'Gd') & (df['SalePrice'] > 500000)].index)
+    df = df.drop(df[(df['KitchenQual'] == 'TA') & (df['SalePrice'] > 300000)].index)
+
+    df = df.drop(df[(df['1stFlrSF'] > 4000)].index)
+
+    df = df.drop(df[(df['FullBath'] == 0) & (df['SalePrice'] > 300000)].index)
+
+    df = df.drop(df[(df['GarageCars'] == 4)].index)
+
+    df = df.drop(df[(df['GrLivArea'] > 4000)].index)
+
+    df = df.drop(df[(df['OverallCond'] == 2) & (df['SalePrice'] > 300000)].index)
+    df = df.drop(df[(df['OverallCond'] == 5) & (df['SalePrice'] > 700000)].index)
+    df = df.drop(df[(df['OverallCond'] == 6) & (df['SalePrice'] > 700000)].index)
+
+    df = df.drop(df[(df['OverallQual'] == 3) & (df['SalePrice'] > 200000)].index)
+    df = df.drop(df[(df['OverallQual'] == 8) & (df['SalePrice'] > 300000)].index)
+    df = df.drop(df[(df['OverallQual'] == 10) & (df['SalePrice'] < 200000)].index)
+
+    df = df.drop(df[(df['TotalBsmtSF'] > 5000)].index)
+
+    df = df.drop(df[(df['TotRmsAbvGrd'] == 10) & (df['SalePrice'] > 500000)].index)
+    df = df.drop(df[(df['TotRmsAbvGrd'] > 14)].index)
+
+    return df
+
+
 def main():
     """
     Loads the dataset analyses it and writes the predictions into a file
@@ -261,11 +304,19 @@ def main():
     #     'Id',
     #     *util.get_ordinal_columns(train_data),
     # ]
-    features = [*train_data.select_dtypes(exclude=['object']).columns, *util.get_ordinal_columns(train_data)]
-    features.remove('SalePrice')
+    features: List[str] = [
+        'BsmtQual', 'BsmtCond', 'CentralAir', 'ExterQual', 'FireplaceQu', 'GarageFinish',
+        'HeatingQC', 'KitchenQual', '1stFlrSF', 'FullBath', 'GarageCars', 'GrLivArea', 'OverallCond', 'OverallQual',
+        'TotalBsmtSF', 'TotRmsAbvGrd',
+        'Id'
+    ]
+    # features = [*train_data.select_dtypes(exclude=['object']).columns, *util.get_ordinal_columns(train_data)]
+    # features.remove('SalePrice')
     print(features)
 
+    train_data = drop_outliers(train_data)
     X: pd.DataFrame = train_data[features].copy()
+    X.drop('Id', axis=1)
     test_data = test_data[features].copy()
     # Setting y to the SalePrice as that is the value we are trying to predict
     y = train_data['SalePrice']
@@ -286,7 +337,7 @@ def main():
         'sketch_eps': [0.03],  # [0.01, 0.02, 0.03, 0.04, 0.05] -> 0.03;
     }
 
-    xgb = XGBRegressor(nthread=1)
+    xgb: XGBRegressor = XGBRegressor(nthread=1)
 
     folds = 5
 
@@ -308,8 +359,12 @@ def main():
     print('\n Best hyperparameters:')
     print(grid_search.best_params_)
     results = pd.DataFrame(grid_search.cv_results_)
+    print('\n Feature importance:')
+    feature_importance = grid_search.best_estimator_.get_booster().get_score(importance_type='weight')
+    print(feature_importance)
     os.makedirs(f'./assets/results/paramsearch/', exist_ok=True)
     results.to_csv(f'./assets/results/paramsearch/{start}-xgb-grid-search.csv', index=False)
+    pd.DataFrame({key: [value] for key, value in feature_importance.items()}).to_csv(f'./assets/results/paramsearch/{start}-xgb-features.csv', index=False)
     m, sec = divmod(stop-start, 60)
     print(f'took {int(m)} min {int(sec)} sec')
 

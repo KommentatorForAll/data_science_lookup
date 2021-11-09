@@ -17,6 +17,7 @@ def plot_object_columns(X: pd.DataFrame):
         print(f'finished plot {i}')
         os.makedirs('./house_prices/assets/plots/by_raw/', exist_ok=True)
         plt.savefig(f'./house_prices/assets/plots/by_raw/{name}.png')
+        plt.clf()
     # plt.show()
 
 
@@ -27,6 +28,7 @@ def plot_numeric_columns(X: pd.DataFrame):
         print(f'finished plot {i}')
         os.makedirs('./house_prices/assets/plots/by_raw/', exist_ok=True)
         plt.savefig(f'./house_prices/assets/plots/by_raw/{name}.png')
+        plt.clf()
         # plt.show()
 
 

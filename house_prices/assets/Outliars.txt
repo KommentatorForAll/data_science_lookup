@@ -1,0 +1,16 @@
+Bsmt Qual	Gd > 500.000 | TA > 350.000
+BsmtCond	Gd > 400.000
+CentralAir
+ExterQual	Fa > 200.000 | Gd > 450.000
+FireplaceQu	Ta > 400.000 | Ex > 500.000
+GarageFinish	RFn > 500.000 | Unf > 300.000 | Fin > 550.000
+HeatingQC
+KitchenQual	Gd > 500.000 | TA > 300.000
+1stFlrSF	> 4000
+FullBakth	0 > 300.000
+GarageCars 	4
+GrLivArea	> 4000
+OverallCond	2 > 300.000 | 5,6 > 700.000
+OverallQual	3 > 200.000 | 8 > 500.000 | 10 < 200.000
+TotalBsmtSF	> 5000
+TotRmsAbvGrd	10 > 500.000 | > 14
