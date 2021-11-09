@@ -1,3 +1,4 @@
+import os
 import time
 import warnings
 from typing import List, Tuple, Set, Union, Iterable
@@ -307,7 +308,8 @@ def main():
     print('\n Best hyperparameters:')
     print(grid_search.best_params_)
     results = pd.DataFrame(grid_search.cv_results_)
-    results.to_csv('xgb-grid-search-results-08.csv', index=False)
+    os.makedirs(f'./assets/results/paramsearch/', exist_ok=True)
+    results.to_csv(f'./assets/results/paramsearch/{start}-xgb-grid-search.csv', index=False)
     m, sec = divmod(stop-start, 60)
     print(f'took {int(m)} min {int(sec)} sec')
 
