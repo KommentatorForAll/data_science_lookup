@@ -35,3 +35,13 @@ def get_ordinal_columns(df: pd.DataFrame):
     df = df.fillna('None')
     cols = [col for col in df.select_dtypes('object').columns if set(df[col].unique()).issubset(vals)]
     return cols
+
+
+def turn_dataset():
+    df: pd.DataFrame = pd.read_csv('./house_prices/assets/results/paramsearch/1636533896.7839923-xgb-features.csv')
+    df = df.transpose()
+    df.to_csv('features.csv')
+
+
+if __name__ == '__main__':
+    turn_dataset()

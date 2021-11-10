@@ -8,9 +8,10 @@ from pandas import Index
 from sklearn.base import ClusterMixin
 from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.model_selection import StratifiedKFold, GridSearchCV, KFold
 # This is just for Typing. I don't acutally use this Class anywhere
 from sklearn.impute._base import _BaseImputer
-from sklearn.model_selection import StratifiedKFold, GridSearchCV
+from sklearn.model_selection._split import _BaseKFold
 from sklearn.preprocessing._encoders import _BaseEncoder, OneHotEncoder, OrdinalEncoder
 from xgboost import XGBRegressor
 
@@ -24,9 +25,7 @@ imputers_to_look_at = [
     KNNImputer,
 ]
 
-
 ORDINAL_ORDER = ['None', 'Po', 'Fa', 'TA', 'Gd', 'Ex']
-
 
 
 def get_na_to_drop(X: pd.DataFrame, threshold: float = 20) -> List[str]:
@@ -39,6 +38,7 @@ def get_na_to_drop(X: pd.DataFrame, threshold: float = 20) -> List[str]:
     """
     percent_missing = X.isnull().mean() * 100
     missing_value_df = pd.DataFrame({'percent_missing': percent_missing})
+    print(missing_value_df.loc[missing_value_df['percent_missing'] > threshold])
     return missing_value_df.loc[missing_value_df['percent_missing'] > threshold].index
 
 
@@ -51,7 +51,7 @@ def split_onehot_ordinal_columns(obj_cols: pd.DataFrame) -> Tuple[Set[str], Set[
     """
     full_set = set(obj_cols.columns)
     ordinal_cols = set(util.get_ordinal_columns(obj_cols))
-    print(ordinal_cols)
+    print(f'following columns will be ordinally encoded: {ordinal_cols}')
     onehot_cols = full_set - ordinal_cols
     return onehot_cols, ordinal_cols
 
@@ -106,7 +106,6 @@ def encode_columns(
             X[list(columns)] = X[list(columns)].fillna('None')
             existing_values = []
             [existing_values.append([x for x in ORDINAL_ORDER if x in X[c].unique()]) for c in columns]
-            print(existing_values)
             encoder = OrdinalEncoder(categories=existing_values)
 
         try:
@@ -169,6 +168,7 @@ def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFra
     :return: the transformed dataset
     """
     cols_to_drop: Iterable[str] = get_na_to_drop(X)
+    print(f'Dropping following columns (too much empty data): {cols_to_drop}')
     X = X.drop(cols_to_drop, axis=1)
 
     obj_cols: pd.DataFrame = X.select_dtypes('object')
@@ -188,6 +188,7 @@ def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFra
     cols_to_drop = get_cols_to_drop_for_ordinal_encoder(high_cardinality_columns, X, test_X)
     # removes all dropped columns from the set, to not get KeyErrors while transforming
     high_cardinality_columns -= cols_to_drop
+    print(f'dropping following columns (more data in test than train): {cols_to_drop}')
     X = X.drop(cols_to_drop, axis=1)
     test_X = test_X.drop(cols_to_drop, axis=1)
 
@@ -247,6 +248,7 @@ def get_top_10_missing_percent(x: pd.DataFrame) -> pd.DataFrame:
 
 
 def drop_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    old_index = df['Id']
     df = df.drop(df[(df['BsmtQual'] == 'Gd') & (df['SalePrice'] > 500000)].index)
     df = df.drop(df[(df['BsmtQual'] == 'TA') & (df['SalePrice'] > 350000)].index)
 
@@ -285,7 +287,8 @@ def drop_outliers(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df.drop(df[(df['TotRmsAbvGrd'] == 10) & (df['SalePrice'] > 500000)].index)
     df = df.drop(df[(df['TotRmsAbvGrd'] > 14)].index)
-
+    new_index = df['Id']
+    print(f'dropped {len(old_index) - len(new_index)} datapoints')
     return df
 
 
@@ -304,35 +307,37 @@ def main():
     #     'Id',
     #     *util.get_ordinal_columns(train_data),
     # ]
-    features: List[str] = [
-        'BsmtQual', 'BsmtCond', 'CentralAir', 'ExterQual', 'FireplaceQu', 'GarageFinish',
-        'HeatingQC', 'KitchenQual', '1stFlrSF', 'FullBath', 'GarageCars', 'GrLivArea', 'OverallCond', 'OverallQual',
-        'TotalBsmtSF', 'TotRmsAbvGrd',
-        'Id'
-    ]
+    # features: List[str] = [
+    #     'BsmtQual', 'CentralAir', 'ExterQual', 'FireplaceQu', 'GarageFinish',
+    #     'HeatingQC', 'KitchenQual', '1stFlrSF', 'FullBath', 'GarageCars', 'GrLivArea', 'OverallCond', 'OverallQual',
+    #     'TotalBsmtSF', 'TotRmsAbvGrd',
+    #     'Alley',  # -19674.467155393835
+    #     'Id',
+    # ]
     # features = [*train_data.select_dtypes(exclude=['object']).columns, *util.get_ordinal_columns(train_data)]
+    features: List[str] = list(test_data.columns)
     # features.remove('SalePrice')
     print(features)
 
-    train_data = drop_outliers(train_data)
+    # This actually greatly reduces the score
+    # train_data = drop_outliers(train_data)
     X: pd.DataFrame = train_data[features].copy()
-    X.drop('Id', axis=1)
+    X = X.drop('Id', axis=1)
     test_data = test_data[features].copy()
     # Setting y to the SalePrice as that is the value we are trying to predict
     y = train_data['SalePrice']
 
     X, test_X = transform_dataset(X, test_data)
 
-    models = [
-        *[[i, XGBRegressor(n_estimators=i, random_state=0)] for i in range(10, 151, 10)]
-    ]
-
     params = {
-        'min_child_weight': [0],  # [1, 5, 10, 20] -> 1; [0.5, 0.75, 1, 2, 3, 4] -> 0.5; [0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5] -> .05
-        'gamma': [0],  # [0.5, 1, 1.5, 2, 5] -> 0.5; [0.1, 0.25, 0.5, 0.75, 1] -> 0.1; [0.01, 0.025, 0.05, 0.075, 0.1] -> 0.01
-        'n_estimators': range(20,31,2),  # [22],  # range(10, 201,10) -> 20; range(10,30,2) -> 22
-        'max_depth': range(3,6),  # [4],  # range(3,6) -> 4
-        'eta': [0.25],  # [0.1, 0.01, 0.05, 0.03] -> 0.1; [0.1, 0.05, 0.075, 0.25, 0.5, 0.75, 1] -> 0.25; [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5] -> 0.2
+        'min_child_weight': [0],
+        # [1, 5, 10, 20] -> 1; [0.5, 0.75, 1, 2, 3, 4] -> 0.5; [0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5] -> .05
+        'gamma': [0],
+        # [0.5, 1, 1.5, 2, 5] -> 0.5; [0.1, 0.25, 0.5, 0.75, 1] -> 0.1; [0.01, 0.025, 0.05, 0.075, 0.1] -> 0.01
+        'n_estimators': range(200, 401, 10),  # range(10, 201,10) -> 20; range(10,30,2) -> 22
+        'max_depth': range(4, 11),  # range(3,6) -> 4
+        'eta': [0.25],
+        # [0.1, 0.01, 0.05, 0.03] -> 0.1; [0.1, 0.05, 0.075, 0.25, 0.5, 0.75, 1] -> 0.25; [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5] -> 0.2
         'tree_method': ['approx'],  # ['auto', 'exact', 'approx', 'hist', 'gpu_hist'] -> 'approx'
         'sketch_eps': [0.03],  # [0.01, 0.02, 0.03, 0.04, 0.05] -> 0.03;
     }
@@ -341,7 +346,7 @@ def main():
 
     folds = 5
 
-    skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=1001)
+    skf: _BaseKFold = KFold(n_splits=folds, shuffle=True, random_state=1001)
 
     grid_search = GridSearchCV(xgb, param_grid=params, scoring='neg_mean_absolute_error', n_jobs=4,
                                cv=skf.split(X, y), verbose=3, refit=True)
@@ -364,8 +369,9 @@ def main():
     print(feature_importance)
     os.makedirs(f'./assets/results/paramsearch/', exist_ok=True)
     results.to_csv(f'./assets/results/paramsearch/{start}-xgb-grid-search.csv', index=False)
-    pd.DataFrame({key: [value] for key, value in feature_importance.items()}).to_csv(f'./assets/results/paramsearch/{start}-xgb-features.csv', index=False)
-    m, sec = divmod(stop-start, 60)
+    pd.DataFrame({key: [value] for key, value in feature_importance.items()}).to_csv(
+        f'./assets/results/paramsearch/{start}-xgb-features.csv', index=False)
+    m, sec = divmod(stop - start, 60)
     print(f'took {int(m)} min {int(sec)} sec')
 
     # for i, model in models:
@@ -380,7 +386,7 @@ def main():
     # best_model = best_capture[0]
 
     predictions = grid_search.best_estimator_.predict(test_X)
-    util.write_prediction(pd.DataFrame({'Id': test_X['Id'], 'SalePrice': predictions}))
+    util.write_prediction(pd.DataFrame({'Id': test_data['Id'], 'SalePrice': predictions}))
 
 
 if __name__ == '__main__':

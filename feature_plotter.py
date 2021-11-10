@@ -13,27 +13,27 @@ def plot_object_columns(X: pd.DataFrame):
         #     continue
         # g.map(sns.catplot, name, 'SalePrice', data=X)
         X[name] = X[name].fillna('None')
-        sns.catplot(name, 'SalePrice', data=X)
+        sns.boxplot(name, 'SalePrice', data=X)
         print(f'finished plot {i}')
         os.makedirs('./house_prices/assets/plots/by_raw/', exist_ok=True)
-        plt.savefig(f'./house_prices/assets/plots/by_raw/{name}.png')
+        plt.savefig(f'./house_prices/assets/plots/by_raw/{name}_box.png')
         plt.clf()
     # plt.show()
 
 
 def plot_numeric_columns(X: pd.DataFrame):
     for i, name in enumerate(X.select_dtypes(exclude='object').columns):
-        plt.scatter(X[name], X['SalePrice'])
+        sns.regplot(X[name], X['SalePrice'])
         plt.xlabel(name)
         print(f'finished plot {i}')
         os.makedirs('./house_prices/assets/plots/by_raw/', exist_ok=True)
-        plt.savefig(f'./house_prices/assets/plots/by_raw/{name}.png')
+        plt.savefig(f'./house_prices/assets/plots/by_raw/{name}_reg.png')
         plt.clf()
         # plt.show()
 
 
 def main():
-    train, _ = util.read_datasets()
+    train, _ = util.read_datasets('./house_prices/assets/input/')
     X: pd.DataFrame = train
     cols = len(X.columns)
     print(f'amount of columns: {cols}')

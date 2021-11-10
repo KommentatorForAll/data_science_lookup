@@ -1,0 +1,17 @@
+,0
+1stFlrSF,41.0
+FullBath,11.0
+GarageCars,16.0
+GrLivArea,57.0
+OverallCond,30.0
+OverallQual,19.0
+TotalBsmtSF,40.0
+TotRmsAbvGrd,20.0
+Id,38.0
+OneHotEncoder0,7.0
+OneHotEncoder2,3.0
+OneHotEncoder3,1.0
+OneHotEncoder4,7.0
+ExterQual,6.0
+HeatingQC,5.0
+BsmtQual,16.0
