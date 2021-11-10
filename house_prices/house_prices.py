@@ -315,8 +315,24 @@ def main():
     #     'Id',
     # ]
     # features = [*train_data.select_dtypes(exclude=['object']).columns, *util.get_ordinal_columns(train_data)]
+
+    # This list of features was selected by looking up the importance of each feature.
+    # It contains all features with an imporance > 20
+    features: List[str] = [
+        'BsmtFinSF2', 'GarageCars',  # 21
+        'Fireplaces', 'HeatingQC',  # 23
+        'BsmtQual',  # 28
+        'ScreenPorch',  # 32
+        'BedroomAbvGr',  # 36
+        'EnclosedPorch',  # 46
+        'TotRmsAbvGrd', 'YrSold', '2ndFlrSF', 'OverallCond', 'WoodDeckSF', 'MasVnrArea',
+        'OverallQual', 'MoSold', 'GarageYrBlt', '1stFlrSF', 'YearRemodAdd', 'OpenPorchSF',
+        'YearBuilt', 'TotalBsmtSF', 'BsmtFinSF1', 'GarageArea', 'MSSubClass', 'GrLivArea',
+        'BsmtUnfSF', 'LotFrontage', 'LotArea',
+        'Id',
+    ]
     features: List[str] = list(test_data.columns)
-    # features.remove('SalePrice')
+    features.remove('SalePrice')
     print(features)
 
     # This actually greatly reduces the score
@@ -335,7 +351,7 @@ def main():
         'gamma': [0],
         # [0.5, 1, 1.5, 2, 5] -> 0.5; [0.1, 0.25, 0.5, 0.75, 1] -> 0.1; [0.01, 0.025, 0.05, 0.075, 0.1] -> 0.01
         'n_estimators': range(200, 401, 10),  # range(10, 201,10) -> 20; range(10,30,2) -> 22
-        'max_depth': range(4, 11),  # range(3,6) -> 4
+        'max_depth': range(1, 5),  # range(3,6) -> 4
         'eta': [0.25],
         # [0.1, 0.01, 0.05, 0.03] -> 0.1; [0.1, 0.05, 0.075, 0.25, 0.5, 0.75, 1] -> 0.25; [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5] -> 0.2
         'tree_method': ['approx'],  # ['auto', 'exact', 'approx', 'hist', 'gpu_hist'] -> 'approx'
@@ -369,7 +385,7 @@ def main():
     print(feature_importance)
     os.makedirs(f'./assets/results/paramsearch/', exist_ok=True)
     results.to_csv(f'./assets/results/paramsearch/{start}-xgb-grid-search.csv', index=False)
-    pd.DataFrame({key: [value] for key, value in feature_importance.items()}).to_csv(
+    pd.DataFrame({key: [value] for key, value in feature_importance.items()}).transpose().sort_values(by=0).to_csv(
         f'./assets/results/paramsearch/{start}-xgb-features.csv', index=False)
     m, sec = divmod(stop - start, 60)
     print(f'took {int(m)} min {int(sec)} sec')

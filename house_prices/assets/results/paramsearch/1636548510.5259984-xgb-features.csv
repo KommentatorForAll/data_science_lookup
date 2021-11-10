@@ -1,0 +1,2 @@
+BsmtFinSF2,GarageCars,Fireplaces,ScreenPorch,BedroomAbvGr,EnclosedPorch,TotRmsAbvGrd,YrSold,2ndFlrSF,OverallCond,WoodDeckSF,MasVnrArea,OverallQual,MoSold,GarageYrBlt,1stFlrSF,YearRemodAdd,OpenPorchSF,YearBuilt,TotalBsmtSF,BsmtFinSF1,GarageArea,MSSubClass,GrLivArea,BsmtUnfSF,LotFrontage,LotArea,BsmtQual,HeatingQC
+40.0,45.0,53.0,51.0,62.0,34.0,69.0,86.0,78.0,72.0,116.0,99.0,86.0,122.0,141.0,152.0,103.0,97.0,110.0,123.0,125.0,171.0,34.0,158.0,149.0,149.0,189.0,21.0,23.0

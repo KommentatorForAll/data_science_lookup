@@ -38,8 +38,10 @@ def get_ordinal_columns(df: pd.DataFrame):
 
 
 def turn_dataset():
-    df: pd.DataFrame = pd.read_csv('./house_prices/assets/results/paramsearch/1636533896.7839923-xgb-features.csv')
+    df: pd.DataFrame = pd.read_csv('./house_prices/assets/results/paramsearch/1636540490.6561828-xgb-features.csv')
     df = df.transpose()
+    print(df.head(5))
+    df = df.sort_values(by=0)
     df.to_csv('features.csv')
 
 
