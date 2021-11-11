@@ -7,6 +7,9 @@
     + [DecisionTrees](#decisiontreeregressor)
     + [RandomForest](#randomforestregressor)
     + [XGBoost](#xgboost)
+  + [Linear Regression](#linear-regression)
+  + [Ordinary least square](#linear-regression-ordinary-least-square)
+  + [Ridge Regression](#ridge-regression)
   + [Parameter Improvement](#parameter-improvement)
 + [Data cleaning](#data-cleaning)
   + [Missing data](#missing-data)
@@ -53,6 +56,20 @@ XGBoost stands for 'Extreme Gradiant Boost'. It is an ensembling method, where i
 then adjusts its parameters to work better and adds it to the ensemble. This process is repeated n times or until the early stop is reached.
 Early stopping happens, if enabled and after a certain amount of rounds there was no improvement in the models.
 To avoid the model stopping too early, due to a local low, an n-init parameter is set to the minimum amount of round which it has to run at least.
+
+### Linear regression
+#### Linear regression (Ordinary least square)
+When using linear regression, One generates a slope based on the formular <code>y = &sum;m<sub>i</sub>*x<sub>i</sub> + b</code>
+for `i` being the index of the feature and m being the magnitude of it. and `b` being the intercept.
+
+While Linear Regression is powerful on small sets with little features, it has problems with overfitting on larger sets of features.
+
+Also, this model has no parameters to tune.
+
+#### Ridge Regression
+Ridge Regression is very similar to Linear Regression, but it tries to keep its magnitudes for each feature close to zero.
+The 'Force' to keep it close to zero is provided using the `alpha` parameter. A bigger value for alpha results in `m` values
+closer to zero. A small value will be almost the same as the basic linear regression model.
 
 ### Parameter improvement
 One way of improving the parameters used in the models, is using Gridsearch.
