@@ -8,10 +8,12 @@ from pandas import Index
 from sklearn.base import ClusterMixin
 from sklearn.cluster import KMeans
 from sklearn.impute import SimpleImputer, KNNImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, KFold
 # This is just for Typing. I don't acutally use this Class anywhere
 from sklearn.impute._base import _BaseImputer
-from sklearn.model_selection._split import _BaseKFold
+from sklearn.model_selection._split import _BaseKFold, train_test_split
 from sklearn.preprocessing._encoders import _BaseEncoder, OneHotEncoder, OrdinalEncoder
 from xgboost import XGBRegressor
 
@@ -46,7 +48,6 @@ def split_onehot_ordinal_columns(obj_cols: pd.DataFrame) -> Tuple[Set[str], Set[
     """
     Splits the given object columns into Columns suitable for orinal encoding and onehot encoding
     :param obj_cols: all columns to look at
-    :param threshold: the point at which the cardinality is counted as high
     :return: A tuple of onehot and ordinal encodeable columns
     """
     full_set = set(obj_cols.columns)
@@ -318,6 +319,7 @@ def main():
 
     # This list of features was selected by looking up the importance of each feature.
     # It contains all features with an imporance > 20
+    # The performance is slightly worse than using all available variables
     features: List[str] = [
         'BsmtFinSF2', 'GarageCars',  # 21
         'Fireplaces', 'HeatingQC',  # 23
@@ -331,8 +333,7 @@ def main():
         'BsmtUnfSF', 'LotFrontage', 'LotArea',
         'Id',
     ]
-    features: List[str] = list(test_data.columns)
-    features.remove('SalePrice')
+    # features: List[str] = list(test_data.columns)
     print(features)
 
     # This actually greatly reduces the score
@@ -345,26 +346,33 @@ def main():
 
     X, test_X = transform_dataset(X, test_data)
 
-    params = {
-        'min_child_weight': [0],
-        # [1, 5, 10, 20] -> 1; [0.5, 0.75, 1, 2, 3, 4] -> 0.5; [0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5] -> .05
-        'gamma': [0],
-        # [0.5, 1, 1.5, 2, 5] -> 0.5; [0.1, 0.25, 0.5, 0.75, 1] -> 0.1; [0.01, 0.025, 0.05, 0.075, 0.1] -> 0.01
-        'n_estimators': range(200, 401, 10),  # range(10, 201,10) -> 20; range(10,30,2) -> 22
-        'max_depth': range(1, 5),  # range(3,6) -> 4
-        'eta': [0.25],
-        # [0.1, 0.01, 0.05, 0.03] -> 0.1; [0.1, 0.05, 0.075, 0.25, 0.5, 0.75, 1] -> 0.25; [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5] -> 0.2
-        'tree_method': ['approx'],  # ['auto', 'exact', 'approx', 'hist', 'gpu_hist'] -> 'approx'
-        'sketch_eps': [0.03],  # [0.01, 0.02, 0.03, 0.04, 0.05] -> 0.03;
-    }
+    # params = {
+    #     'min_child_weight': [0],
+    #     # [1, 5, 10, 20] -> 1; [0.5, 0.75, 1, 2, 3, 4] -> 0.5; [0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5] -> .05
+    #     'gamma': [0],
+    #     # [0.5, 1, 1.5, 2, 5] -> 0.5; [0.1, 0.25, 0.5, 0.75, 1] -> 0.1; [0.01, 0.025, 0.05, 0.075, 0.1] -> 0.01
+    #     'n_estimators': range(200, 401, 10),  # range(10, 201,10) -> 20; range(10,30,2) -> 22
+    #     'max_depth': range(1, 5),  # range(3,6) -> 4
+    #     'eta': [0.25],
+    #     # [0.1, 0.01, 0.05, 0.03] -> 0.1; [0.1, 0.05, 0.075, 0.25, 0.5, 0.75, 1] -> 0.25; [0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.5] -> 0.2
+    #     'tree_method': ['approx'],  # ['auto', 'exact', 'approx', 'hist', 'gpu_hist'] -> 'approx'
+    #     'sketch_eps': [0.03],  # [0.01, 0.02, 0.03, 0.04, 0.05] -> 0.03;
+    # }
+    params = {}
 
-    xgb: XGBRegressor = XGBRegressor(nthread=1)
+    # xgb: XGBRegressor = XGBRegressor(nthread=1)
 
     folds = 5
+    # Using LinearRegression scores worse than a xgbregressor, as it only scores about 20000
+    model = LinearRegression(n_jobs=-1, normalize=False, copy_X=True)
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X, y)
+    test_X = scaler.transform(test_X)
+    x_train, x_val, y_train, y_val = train_test_split(X, y)
 
     skf: _BaseKFold = KFold(n_splits=folds, shuffle=True, random_state=1001)
 
-    grid_search = GridSearchCV(xgb, param_grid=params, scoring='neg_mean_absolute_error', n_jobs=4,
+    grid_search = GridSearchCV(model, param_grid=params, scoring='neg_mean_absolute_error', n_jobs=4,
                                cv=skf.split(X, y), verbose=3, refit=True)
 
     start = time.time()
@@ -381,12 +389,12 @@ def main():
     print(grid_search.best_params_)
     results = pd.DataFrame(grid_search.cv_results_)
     print('\n Feature importance:')
-    feature_importance = grid_search.best_estimator_.get_booster().get_score(importance_type='weight')
+    feature_importance = grid_search.best_estimator_.coef_  # .get_booster().get_score(importance_type='weight')
     print(feature_importance)
     os.makedirs(f'./assets/results/paramsearch/', exist_ok=True)
     results.to_csv(f'./assets/results/paramsearch/{start}-xgb-grid-search.csv', index=False)
-    pd.DataFrame({key: [value] for key, value in feature_importance.items()}).transpose().sort_values(by=0).to_csv(
-        f'./assets/results/paramsearch/{start}-xgb-features.csv', index=False)
+    # pd.DataFrame({key: [value] for key, value in feature_importance.items()}).transpose().sort_values(by=0).to_csv(
+    #     f'./assets/results/paramsearch/{start}-xgb-features.csv', index=False)
     m, sec = divmod(stop - start, 60)
     print(f'took {int(m)} min {int(sec)} sec')
 

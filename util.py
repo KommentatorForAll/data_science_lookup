@@ -45,5 +45,11 @@ def turn_dataset():
     df.to_csv('features.csv')
 
 
+def plot_submission_price():
+    df: pd.DataFrame = pd.read_csv('./house_prices/assets/output/1636617678.1904528-submission.csv')
+    plt.scatter(df['SalePrice'], df['SalePrice'])
+    plt.show()
+
+
 if __name__ == '__main__':
-    turn_dataset()
+    plot_submission_price()
