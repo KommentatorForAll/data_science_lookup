@@ -178,14 +178,13 @@ def transform_dataset(X: pd.DataFrame, test_X: pd.DataFrame) -> Tuple[pd.DataFra
     class A:
         def fit_transform(self, df: pd.DataFrame):
             return df.fillna('None')
-    x = {'fit_transform': lambda df: df.fillna('None')}
     strategies = [
         (num_cols.columns, SimpleImputer(fill_value=0)),
         (obj_cols.columns, A()),
         # (low_cardinality_columns, SimpleImputer(strategy='most_frequent')),  # KNN might be quite useful here
         # (high_cardinality_columns, SimpleImputer(fill_value='None')),  # Same over here
     ]
-    obj_cols[list(high_cardinality_columns)] = obj_cols[list(high_cardinality_columns)].fillna('None')
+    # obj_cols[list(high_cardinality_columns)] = obj_cols[list(high_cardinality_columns)].fillna('None')
 
     X = fill_na(X, strategies)
     test_X = fill_na(test_X, strategies)
@@ -373,8 +372,8 @@ def main():
     # Using LinearRegression scores worse than a xgbregressor, as it only scores about 20000
     model = Lasso(copy_X=True)
     scaler = StandardScaler()
-    X = scaler.fit_transform(X, y)
-    test_X = scaler.transform(test_X)
+    # X = scaler.fit_transform(X, y)
+    # test_X = scaler.transform(test_X)
     x_train, x_val, y_train, y_val = train_test_split(X, y)
 
     skf: _BaseKFold = KFold(n_splits=folds, shuffle=True, random_state=1001)
