@@ -26,7 +26,18 @@
   + [Creating Features](#creating-features)
   + [Clustering Data](#clustering-data)
     + [K-Means](#k-means)
-
++ [Neural Networks](#neural-networks)
+  + [Neurons](#neurons)
+    + [Activation Functions](#activation-functions)
+    + [Neuron Layers](#neuron-layers)
+    + [How does a Neural Network learn](#how-does-a-neural-network-learn)
+    + [Errors](#errors)
+    + [Backpropagating errors](#backpropagating-errors)
+  + [Setting initial weights](#setting-initial-weights)
+  + [Choosing a number of nodes](#choosing-a-number-of-nodes)
+    + [Input layer](#input-layer)
+    + [Output layer](#output-layer)
+    + [Hidden layer](#hidden-layer)
 ## Models
 There are many kind of models in machine learning. This includes Neural networks, Decision trees and much more.
 
