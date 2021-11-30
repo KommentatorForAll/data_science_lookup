@@ -60,7 +60,7 @@ To avoid the model stopping too early, due to a local low, an n-init parameter i
 ### Linear regression
 #### Linear regression (Ordinary least square)
 When using linear regression, One generates a slope based on the formular <code>y = &sum;m<sub>i</sub>*x<sub>i</sub> + b</code>
-for `i` being the index of the feature and m being the magnitude of it. and `b` being the intercept.
+for <code>i</code> being the index of the feature and m being the magnitude of it. and <code>b</code> being the intercept.
 
 While Linear Regression is powerful on small sets with little features, it has problems with overfitting on larger sets of features.
 
@@ -68,7 +68,7 @@ Also, this model has no parameters to tune.
 
 #### Ridge Regression
 Ridge Regression is very similar to Linear Regression, but it tries to keep its magnitudes for each feature close to zero.
-The 'Force' to keep it close to zero is provided using the `alpha` parameter. A bigger value for alpha results in `m` values
+The 'Force' to keep it close to zero is provided using the <code>alpha</code> parameter. A bigger value for alpha results in <code>m</code> values
 closer to zero. A small value will be almost the same as the basic linear regression model.
 
 ### Parameter improvement
@@ -176,3 +176,89 @@ K-Means clusters data using the following basic steps:
 4. You're done
 
 The clusters can then be added as a new Feature to the dataset.
+
+## Neural Networks
+While Neural Networks are still Machine Learning approaches, they differ a lot from other models, such as Decision Trees.
+Instead of making hard, boolean decision (either true or false), they are designed to mimic an organic brain with all its 'fuzziness'.
+
+### Neurons
+A Neural Network consists of multiple Neurons. 
+Each Neuron is only capable of performing a simple task, such as adding up input values.
+
+#### Activation Functions
+Usually, in addition to their core task - adding values - they have a so called 'activation function'.
+The activation function helps to moderate the inputs. Here are some examples:
+- Stepper: 0 while x is below a threshold 1 if above.
+
+While this seems reasonable, nature rarely has hard edges. Let us look at a more gentle curve:
+- Signmoid:  1(1+e<sup>-x</sup>) This produces an output in a range of 0 and 1 (both exclusive) with a gentle curve
+
+But there is also a third commonly used activation function:
+- ReLu: max(0, x) This means, the output is 0 unless x > 0. When using this function, you may have to normalize the inputs after each layer.
+This is the only one appropriate for Regression tasks, as its output varies has an infinite range [0;infinite[,
+while the other functions are restricted to [0;1] and the values 0 and 1.
+
+#### Neuron Layers
+As one can see, a single neuron is quite simple. It won't be able to do complex recognition or tasks alone.
+That is why one uses multiple Layers of neurons, each containing multiple neurons themselves.
+Each Neuron of a Layer is connected to each Neuron of the next Layer. 
+Therefore, each Neuron is directly and indirectly dependent on all neurons in previous layers.
+The first layer of a neural network is called the 'input layer'. It does not perform any calculations.
+The last layer is the 'output layer' as its output is, well, the output.
+All layers in between are called 'hidden layers' because they don't directly effect the output nor are they directly effected by the input.
+They are hidden from the outside.
+
+#### How does a Neural Network learn?
+As mentioned above, the task of a Neuron is to e.g. add up numbers.
+Though it doesn't directly do it, but weights the numbers instead.
+Each connection between two neurons is added a unique weight value, which the input gets multiplied with.
+At first, that weight is randomly chosen, then it gets adjusted according the output error.
+
+##### Errors
+The output error is just the difference of the actual output and the desired output, which is given by the training data.
+Ok, now we have one error value which we have to distribute over multiple weights to adjust. 
+We could split them evenly, but that is prune to falsifying already correct weights. 
+Or we could split them unevenly according their fraction of all weights.
+That means, if one input has a weight of 1 and another of 2, the second is responsible for 2/3 of the error and the first for 1 third.
+This process can be repeated for all output nodes.
+
+##### Backpropagating errors
+This concept might work fine for the last layer, where we are certain what our error is, but what about the hidden layers?
+As we know the error as well as the weight for each connection, we can combine them in the same way we do for our inputs:
+multiply their error by the weight fraction. That way, we get our output error for this node. This process can be repeated for all layers.
+
+### Setting initial weights
+In the beginning we said, that the weights are chosen randomly. 
+That is only half correct.
+They are chosen randomly, but not completely:
+
+Mathematicians have worked out ranges for specific shapes of networks and specific sigmoid functions, but that's, well, quite specific.
+A good rule of thumb is to choose the weights normally distributed between <code>-1/&radic; (incoming links)</code> and <code>1/&radic; (incoming links)</code>.
+The weights should NEVER be all the same, nor 0!!
+
+Not the same, because the error would be evenly distributed and adjusted, resulting in another evenly distributed set of weights,
+catching itself in a loop.
+
+Not zero, because zero cancels the input signal completely, and removes the possibility to adjust the weights.
+
+### Choosing a number of nodes
+Each layer has a specific amount of nodes or Neurons. So, how does one choose the correct amount if there even is one
+
+#### Input layer
+The number of input nodes for a Neural Network is quite obvious: The number of features you have in your input data.
+If you have an image of 28 x 28, you want to have 28*28 = 784 input nodes.
+
+#### Output layer
+This depends on the problem you want to solve: 
+
+For a Regression problem, where you are searching for a continues output number, such as a house price,
+you want to have just one output node containing said number.
+
+For a Classification problem, you want to have the amount of nodes as the number of Classes you are trying to detect.
+
+#### Hidden layer
+This is more complex. The number of nodes is the amount of features you are trying to detect.
+The more Neurons per layer you have, the more features are you trying to detect. 
+There is indeed no perfect way to choose how many Neurons you want.
+Best way is to experiment until you find something which works
+
